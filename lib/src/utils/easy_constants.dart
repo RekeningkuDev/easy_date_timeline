@@ -9,7 +9,7 @@ class EasyConstants {
   static const BorderRadius daySplashBorder =
       BorderRadius.all(Radius.circular(dayWidgetBorderRadius));
   static const double dayWidgetWidth = 68.0;
-  static const double dayWidgetHeight = 112.0;
+  static const double dayWidgetHeight = 70.0;
   static const double dayAsNumFontSize = 20.0;
   static const double dayAsStrFontSize = 12.0;
   static const int animationDuration = 300;

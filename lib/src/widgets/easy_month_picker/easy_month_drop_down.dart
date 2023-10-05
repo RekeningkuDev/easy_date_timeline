@@ -37,16 +37,22 @@ class EasyMonthDropDown extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12.0),
         elevation: EasyConstants.monthDropDownElevation,
         value: value,
-        style: style,
+        style: const TextStyle(
+          color: Color(0xFF161B22),
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+        ),
+        dropdownColor: Colors.white,
         items: EasyDateUtils.getYearMonths(DateTime.now(), locale)
             .map(
               (month) => DropdownMenuItem<EasyMonth>(
                 value: month,
-                child: Text(month.name),
+                child: Text(" ${month.name} ${DateTime.now().year.toString()}"),
               ),
             )
             .toList(),
         onChanged: onMonthChange,
+        icon: const Icon(Icons.keyboard_arrow_down),
       ),
     );
   }

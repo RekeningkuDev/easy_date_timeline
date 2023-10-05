@@ -6,13 +6,13 @@ import '../../properties/properties.dart';
 import '../../utils/utils.dart';
 import '../easy_month_picker/easy_month_picker.dart';
 import '../time_line_widget/timeline_widget.dart';
-import 'selected_date_widget.dart';
 
 /// Represents a timeline widget for displaying dates in a horizontal line.
 class EasyDateTimeLine extends StatefulWidget {
   const EasyDateTimeLine({
     super.key,
     required this.initialDate,
+    this.navigateTo,
     this.disabledDates,
     this.headerProps = const EasyHeaderProps(),
     this.timeLineProps = const EasyTimeLineProps(),
@@ -65,6 +65,9 @@ class EasyDateTimeLine extends StatefulWidget {
 
   /// A `String` that represents the locale code to use for formatting the dates in the timeline.
   final String locale;
+
+  /// A function that route to somewhere when user taps on header and left arrow twice
+  final Future<void> Function()? navigateTo;
 
   @override
   State<EasyDateTimeLine> createState() => _EasyDateTimeLineState();
@@ -126,43 +129,35 @@ class _EasyDateTimeLineState extends State<EasyDateTimeLine> {
     return ValueListenableBuilder(
       valueListenable: _focusedDateListener,
       builder: (context, focusedDate, child) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (_headerProps.showHeader)
-            Padding(
-              padding: _headerProps.padding ??
-                  const EdgeInsets.only(
-                    left: EasyConstants.timelinePadding * 2,
-                    right: EasyConstants.timelinePadding,
-                    bottom: EasyConstants.timelinePadding,
+          GestureDetector(
+            onTap: () async {
+              if (widget.navigateTo != null) {
+                await widget.navigateTo!();
+              }
+            },
+            child: Row(
+              children: [
+                Text(
+                  "${_easyMonth.name} ${focusedDate?.year}",
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
                   ),
-              child: Row(
-                mainAxisAlignment: _headerProps.centerHeader == true
-                    ? MainAxisAlignment.center
-                    : MainAxisAlignment.spaceBetween,
-                children: [
-                  SelectedDateWidget(
-                    date: focusedDate ?? initialDate,
-                    locale: widget.locale,
-                    headerProps: _headerProps,
-                  ),
-                  if (_showMonthPicker(pickerType: MonthPickerType.dropDown))
-                    child!,
-                  if (_showMonthPicker(pickerType: MonthPickerType.switcher))
-                    EasyMonthSwitcher(
-                      locale: widget.locale,
-                      value: _easyMonth,
-                      onMonthChange: _onMonthChange,
-                      style: _headerProps.monthStyle,
-                    ),
-                ],
-              ),
+                ),
+                const Icon(Icons.keyboard_arrow_down)
+              ],
             ),
+          ),
+          const SizedBox(height: 16),
           TimeLineWidget(
             initialDate: initialDate.copyWith(
               month: _easyMonth.vale,
               day: _initialDay,
             ),
+            navigateTo: widget.navigateTo,
             inactiveDates: widget.disabledDates,
             focusedDate: focusedDate,
             onDateChange: _onFocusedDateChanged,
@@ -175,21 +170,21 @@ class _EasyDateTimeLineState extends State<EasyDateTimeLine> {
           ),
         ],
       ),
-      child: EasyMonthDropDown(
-        value: _easyMonth,
-        locale: widget.locale,
-        onMonthChange: _onMonthChange,
-        style: _headerProps.monthStyle,
-      ),
+      // child: EasyMonthDropDown(
+      //   value: _easyMonth,
+      //   locale: widget.locale,
+      //   onMonthChange: _onMonthChange,
+      //   style: _headerProps.monthStyle,
+      // ),
     );
   }
 
-  void _onMonthChange(month) {
-    setState(() {
-      _initialDay = 1;
-      _easyMonth = month!;
-    });
-  }
+  // void _onMonthChange(month) {
+  //   setState(() {
+  //     _initialDay = 1;
+  //     _easyMonth = month!;
+  //   });
+  // }
 
   /// The method returns a boolean value, which indicates whether the month picker
   /// should be displayed. If the _headerProps object is not null and its monthPickerType property

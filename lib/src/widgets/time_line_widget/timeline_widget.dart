@@ -13,6 +13,7 @@ class TimeLineWidget extends StatefulWidget {
     required this.focusedDate,
     required this.activeDayTextColor,
     required this.activeDayColor,
+    this.navigateTo,
     this.inactiveDates,
     this.dayProps = const EasyDayProps(),
     this.locale = "en_US",
@@ -64,6 +65,9 @@ class TimeLineWidget extends StatefulWidget {
   /// A `String` that represents the locale code to use for formatting the dates in the timeline.
   final String locale;
 
+  /// A function that route to somewhere when user taps on header and left arrow twice
+  final Future<void> Function()? navigateTo;
+
   @override
   State<TimeLineWidget> createState() => _TimeLineWidgetState();
 }
@@ -75,19 +79,32 @@ class _TimeLineWidgetState extends State<TimeLineWidget> {
   double get _dayWidth => _dayProps.width;
   double get _dayHeight => _dayProps.height;
   double get _dayOffsetConstrains => _isLandscapeMode ? _dayHeight : _dayWidth;
+  DateTime? _leftMostVisibleDate;
+  DateTime? _rightMostVisibleDate;
+  int _leftArrowClickCount = 0;
 
   late ScrollController _controller;
   @override
   void initState() {
     super.initState();
-
+    _leftArrowClickCount = 0;
     _controller = ScrollController(
       initialScrollOffset: _calculateDateOffset(widget.initialDate),
     );
+    _controller.addListener(_handleScrollUpdate);
+    _updateVisibleDates();
+  }
+
+  void _handleScrollUpdate() {
+    if (_controller.hasClients) {
+      _updateVisibleDates();
+      setState(() {}); // To rebuild the widget and reflect the changes
+    }
   }
 
   @override
   void dispose() {
+    _controller.removeListener(_handleScrollUpdate);
     _controller.dispose();
     super.dispose();
   }
@@ -100,22 +117,39 @@ class _TimeLineWidgetState extends State<TimeLineWidget> {
   /// (which is either the value of widget.easyDayProps.width or a default value of EasyConstants.dayWidgetWidth).
   /// It then adds to this value the product of offset and [EasyConstants.separatorPadding] (which represents the width of the space between each day widget)
   double _calculateDateOffset(DateTime date) {
-    final startDate = DateTime(date.year, date.month, 1);
-    int offset = date.difference(startDate).inDays;
+    int weeksFromStart = (date.day / 7).ceil();
     double adjustedHPadding =
         _timeLineProps.hPadding > EasyConstants.timelinePadding
             ? (_timeLineProps.hPadding - EasyConstants.timelinePadding)
             : 0.0;
-    if (offset == 0) {
-      return 0.0;
-    }
-    return (offset * _dayOffsetConstrains) +
-        (offset * _timeLineProps.separatorPadding) +
+
+    return (weeksFromStart * _dayOffsetConstrains) +
+        (weeksFromStart * _timeLineProps.separatorPadding) +
         adjustedHPadding;
+  }
+
+  void _updateVisibleDates() {
+    if (!_controller.hasClients) return;
+
+    double offset = _controller.offset;
+    int firstVisibleDayIndex =
+        (offset / (_dayOffsetConstrains + _timeLineProps.separatorPadding))
+            .floor();
+    int lastVisibleDayIndex = ((offset +
+                MediaQuery.of(context).size.width -
+                (2 * _timeLineProps.hPadding)) /
+            (_dayOffsetConstrains + _timeLineProps.separatorPadding))
+        .floor();
+
+    _leftMostVisibleDate = DateTime(widget.initialDate.year,
+        widget.initialDate.month, firstVisibleDayIndex + 1);
+    _rightMostVisibleDate = DateTime(widget.initialDate.year,
+        widget.initialDate.month, lastVisibleDayIndex + 1);
   }
 
   @override
   Widget build(BuildContext context) {
+    _updateVisibleDates();
     final initialDate = widget.initialDate;
 
     return Container(
@@ -125,69 +159,122 @@ class _TimeLineWidgetState extends State<TimeLineWidget> {
           ? _timeLineProps.backgroundColor
           : null,
       decoration: _timeLineProps.decoration,
-      child: ClipRRect(
-        borderRadius:
-            _timeLineProps.decoration?.borderRadius ?? BorderRadius.zero,
-        child: ListView.separated(
-          controller: _controller,
-          scrollDirection: Axis.horizontal,
-          padding: EdgeInsets.symmetric(
-            horizontal: _timeLineProps.hPadding,
-            vertical: _timeLineProps.vPadding,
-          ),
-          itemBuilder: (context, index) {
-            final currentDate = DateTime(initialDate.year, initialDate.month, 1)
-                .add(Duration(days: index));
-            final isSelected = widget.focusedDate != null
-                ? EasyDateUtils.isSameDay(widget.focusedDate!, currentDate)
-                : EasyDateUtils.isSameDay(widget.initialDate, currentDate);
-
-            bool isDisabledDay = false;
-            // Check if this date should be deactivated only for the DeactivatedDates.
-            if (widget.inactiveDates != null) {
-              for (DateTime inactiveDate in widget.inactiveDates!) {
-                if (EasyDateUtils.isSameDay(currentDate, inactiveDate)) {
-                  isDisabledDay = true;
-                  break;
-                }
+      child: Row(
+        children: [
+          InkWell(
+            onTap: () {
+              if (_leftArrowClickCount >= 2) {
+                widget
+                    .navigateTo!(); // Assuming '/calendarPage' is the route for your calendar page
+                return;
               }
-            }
-            return widget.itemBuilder != null
-                ? _dayItemBuilder(
-                    context,
-                    isSelected,
-                    currentDate,
-                  )
-                : EasyDayWidget(
-                    easyDayProps: _dayProps,
-                    date: currentDate,
-                    locale: widget.locale,
-                    isSelected: isSelected,
-                    isDisabled: isDisabledDay,
-                    onDayPressed: () => _onDayChanged(isSelected, currentDate),
-                    activeTextColor: widget.activeDayTextColor,
-                    activeDayColor: widget.activeDayColor,
+
+              if (_leftMostVisibleDate?.day != 1) {
+                _controller.jumpTo(
+                  _controller.offset -
+                      (_dayOffsetConstrains + _timeLineProps.separatorPadding) *
+                          4,
+                );
+                _updateVisibleDates();
+                _leftArrowClickCount++; // Increase the count of arrow clicks
+              }
+            },
+            child: Icon(
+              Icons.chevron_left,
+              color:
+                  _leftMostVisibleDate?.day == 1 ? Colors.grey : Colors.black,
+            ),
+          ),
+          Expanded(
+            child: ClipRRect(
+              borderRadius:
+                  _timeLineProps.decoration?.borderRadius ?? BorderRadius.zero,
+              child: ListView.separated(
+                controller: _controller,
+                scrollDirection: Axis.horizontal,
+                physics: const NeverScrollableScrollPhysics(),
+                padding: EdgeInsets.symmetric(
+                  horizontal: _timeLineProps.hPadding,
+                  vertical: _timeLineProps.vPadding,
+                ),
+                itemBuilder: (context, index) {
+                  // Change from weekly increment to daily increment
+                  final currentDate =
+                      DateTime(initialDate.year, initialDate.month, index + 1);
+                  final isSelected = widget.focusedDate != null
+                      ? EasyDateUtils.isSameDay(
+                          widget.focusedDate!, currentDate)
+                      : EasyDateUtils.isSameDay(
+                          widget.initialDate, currentDate);
+
+                  bool isDisabledDay = false;
+                  // Check if this date should be deactivated.
+                  if (widget.inactiveDates != null) {
+                    for (DateTime inactiveDate in widget.inactiveDates!) {
+                      if (EasyDateUtils.isSameDay(currentDate, inactiveDate)) {
+                        isDisabledDay = true;
+                        break;
+                      }
+                    }
+                  }
+                  return widget.itemBuilder != null
+                      ? _dayItemBuilder(context, isSelected, currentDate)
+                      : EasyDayWidget(
+                          easyDayProps: _dayProps,
+                          date: currentDate,
+                          locale: widget.locale,
+                          isSelected: isSelected,
+                          isDisabled: isDisabledDay,
+                          onDayPressed: () =>
+                              _onDayChanged(isSelected, currentDate),
+                          activeTextColor: widget.activeDayTextColor,
+                          activeDayColor: widget.activeDayColor,
+                        );
+                },
+                // Represent the number of days in the month rather than weeks
+                separatorBuilder: (context, index) {
+                  return SizedBox(
+                    width: _timeLineProps.separatorPadding,
                   );
-          },
-          separatorBuilder: (context, index) {
-            return SizedBox(
-              width: _timeLineProps.separatorPadding,
-            );
-          },
-          itemCount: EasyDateUtils.getDaysInMonth(initialDate),
-        ),
+                },
+                itemCount: EasyDateUtils.getDaysInMonth(initialDate),
+              ),
+            ),
+          ),
+          InkWell(
+            onTap: _rightMostVisibleDate?.day ==
+                    EasyDateUtils.getDaysInMonth(widget.initialDate)
+                ? null
+                : () {
+                    _controller.jumpTo(
+                      _controller.offset +
+                          (_dayOffsetConstrains +
+                                  _timeLineProps.separatorPadding) *
+                              4,
+                    );
+                    _updateVisibleDates();
+                    _leftArrowClickCount = 0;
+                  },
+            child: Icon(
+              Icons.chevron_right,
+              color: _rightMostVisibleDate?.day ==
+                      EasyDateUtils.getDaysInMonth(widget.initialDate)
+                  ? Colors.grey
+                  : Colors.black,
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  InkWell _dayItemBuilder(
+  GestureDetector _dayItemBuilder(
     BuildContext context,
     bool isSelected,
     DateTime date,
   ) {
-    return InkWell(
+    return GestureDetector(
       onTap: () => _onDayChanged(isSelected, date),
-      borderRadius: BorderRadius.circular(_dayProps.activeBorderRadius),
       child: widget.itemBuilder!(
         context,
         date.day.toString(),
